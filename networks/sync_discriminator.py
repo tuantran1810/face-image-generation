@@ -29,6 +29,6 @@ class SyncDiscriminator(nn.Module):
 if __name__ == "__main__":
     s_dis = SyncDiscriminator()
     images = torch.ones(7, 3, 5, 96, 64)
-    audio = torch.ones(7, 1, 8000)
+    audio = torch.ones(7, 1, 8820)
     y = s_dis(images, audio)
     print(y.shape)

@@ -61,7 +61,7 @@ class AudioEncoder(nn.Module):
         return self.__layers(x).squeeze(2)
 
 if __name__ == "__main__":
-    x = torch.ones(3, 1, 8000)
+    x = torch.ones(3, 1, 8820)
     aenc = AudioEncoder()
     print(aenc)
     print(aenc(x).shape)

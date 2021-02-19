@@ -19,7 +19,7 @@ class Generator(nn.Module):
         '''
         images: (batch, channels, w, h)
         audios: (batch, channels, data)
-        output: (batch, sequence, channels, w, h)
+        output: (batch, channels, sequence, w, h)
         '''
         batch_size = images.shape[0]
         if images.shape[0] != audios.shape[0]:
@@ -43,11 +43,13 @@ class Generator(nn.Module):
         output = self.__frame_dec(id_feature, audio_feature, noise_feature, skip_features)
         output_shape = output.shape
         output = output.reshape(batch_size, t, *output_shape[1:])
+        output = output.transpose(1, 2)
         return output
 
 if __name__ == "__main__":
     gen = Generator()
     images = torch.randn(2, 3, 96, 128)
     audios = torch.randn(2, 1, 132300)
+    print(gen)
     out = gen(images, audios)
     print(out.shape)
