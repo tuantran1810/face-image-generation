@@ -36,6 +36,9 @@ class GansTrainer:
         self.__last_log_time = time.time()
         self.__discriminator_generator_training_ratio = discriminator_generator_training_ratio
 
+        self.__save_model_callback: Callable[[int, nn.Module, dict[str, nn.Module]], None] = None
+        self.__evaluation_callback: Callable[[int, int, Any, Any], None] = None
+
     def inject_train_dataloader(self, dataloader):
         if dataloader is None:
             raise Exception("inject invalid dataloader")
@@ -64,6 +67,14 @@ class GansTrainer:
         if loss_function is None:
             raise Exception("inject invalid loss function")
         self.__other_loss_functions[name] = loss_function
+        return self
+
+    def inject_save_model_callback(self, callback):
+        self.__save_model_callback = callback
+        return self
+
+    def inject_evaluation_callback(self, callback):
+        self.__evaluation_callback = callback
         return self
 
     def __metric_log(self, epoch, sample, metrics):
@@ -100,6 +111,7 @@ class GansTrainer:
         generator_optim = self.__generator_module.optim
         for epoch in range(self.__epochs):
             self.__log(f"================================================[epoch {epoch}]================================================")
+            self.__log("start training")
             for i, orig_data in enumerate(self.__train_dataloader()):
                 metrics = dict()
                 # train generator
@@ -139,41 +151,60 @@ class GansTrainer:
 
                 self.__do_logging(epoch, i, metrics)
             
-            if self.__test_dataloader is None:
-                continue
+            self.__log(f"done training")
+            if self.__test_dataloader is not None:
+                self.__log("start evaluating")
+                metrics = dict()
+                cnt = 0.0
+                with torch.no_grad():
+                    for i, orig_data in enumerate(self.__test_dataloader()):
+                        cnt += 1.0
+                        generated_data = self.__generate(orig_data)
 
-            metrics = dict()
-            cnt = 0.0
-            with torch.no_grad():
-                for orig_data in self.__test_dataloader():
-                    cnt += 1.0
-                    generated_data = self.__generate(orig_data)
+                        all_loss = list()
+                        for _, discriminator in self.__discriminator_modules.items():
+                            dis = discriminator.model
+                            xhat = dis(orig_data, generated_data, discriminator_training = False)
+                            y = dis.suggested_generator_training_label(xhat).to(self.__device)
+                            loss = discriminator.loss_function(xhat, y)
+                            all_loss.append(loss)
 
-                    all_loss = list()
-                    for _, discriminator in self.__discriminator_modules.items():
-                        dis = discriminator.model
-                        xhat = dis(orig_data, generated_data, discriminator_training = False)
-                        y = dis.suggested_generator_training_label(xhat).to(self.__device)
-                        loss = discriminator.loss_function(xhat, y)
-                        all_loss.append(loss)
+                        for _, loss_function in self.__other_loss_functions.items():
+                            loss = loss_function(orig_data, generated_data)
+                            all_loss.append(loss)
 
-                    for _, loss_function in self.__other_loss_functions.items():
-                        loss = loss_function(orig_data, generated_data)
-                        all_loss.append(loss)
+                        generator_loss = sum(all_loss)
+                        if "generator_loss" in metrics:
+                            metrics["generator_loss"] += generator_loss
+                        else:
+                            metrics["generator_loss"] = generator_loss
 
-                    generator_loss = sum(all_loss)
-                    metrics["generator_loss"] += generator_loss
+                        for d_name, discriminator in self.__discriminator_modules.items():
+                            dis = discriminator.model
+                            xhat = dis(orig_data, generated_data, discriminator_training = False)
+                            y = dis.suggested_discriminator_training_label(xhat).to(self.__device)
+                            loss = discriminator.loss_function(xhat, y)
+                            l_name = d_name + '_loss'
+                            if l_name in metrics:
+                                metrics[d_name + '_loss'] += loss
+                            else:
+                                metrics[d_name + '_loss'] = loss
+                        
+                        if self.__evaluation_callback is not None:
+                            self.__evaluation_callback(epoch, i, orig_data, generated_data)
+                
+                for k, v in metrics.items():
+                    metrics[k] = v/cnt
 
-                    for d_name, discriminator in self.__discriminator_modules.items():
-                        dis = discriminator.model
-                        xhat = dis(orig_data, generated_data, discriminator_training = False)
-                        y = dis.suggested_discriminator_training_label(xhat).to(self.__device)
-                        loss = discriminator.loss_function(xhat, y)
-                        loss.backward()
-                        metrics[d_name + '_loss'] += loss
-            
-            for k, v in metrics.items():
-                metrics[k] = v/cnt
+                self.__metric_log(epoch, -1, metrics)
+                self.__log("done evaluating")
 
-            self.__metric_log(epoch, -1, metrics)
+            if self.__save_model_callback is not None:
+                self.__log("saving model...")
+                dis_map = dict()
+                for k, v in self.__discriminator_modules.items():
+                    dis_map[k] = v.model
+                self.__save_model_callback(epoch, self.__generator_module.model, dis_map)
+                self.__log("done saving model")
+
             self.__log("================================================================================================")

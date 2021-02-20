@@ -1,5 +1,6 @@
 import sys, os
 sys.path.append(os.path.dirname(__file__))
+from pathlib import Path
 import torch
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -8,6 +9,7 @@ from networks.trainer_interface import *
 from frameworks.gans_trainer import GansTrainer, GansModule
 from utils.path_dataset import PathDataset
 import pickle
+from loguru import logger as log
 
 class Runner:
     def __init__(
@@ -24,6 +26,9 @@ class Runner:
         self.__trainer = GansTrainer(epochs = epochs)
 
         self.__trainer.inject_train_dataloader(self.__produce_data)
+        self.__trainer.inject_test_dataloader(self.__produce_data)
+        self.__trainer.inject_evaluation_callback(self.__save_evaluation_data)
+        self.__trainer.inject_save_model_callback(self.__save_model)
 
         generator = GeneratorTrainerInterface()
         generator_module = GansModule (
@@ -65,7 +70,7 @@ class Runner:
             video = data['video']
             video = np.transpose(video, (1, 0, 2, 3))
             video = torch.tensor(video/255.0).float()
-            audio = data['audio']
+            audio = data['audio']/32768.0
             audio = np.pad(audio, (486, 486), 'constant', constant_values = (0, 0))
             audio = torch.tensor(np.expand_dims(audio, axis = 0)).float()
             return (video, audio)
@@ -84,6 +89,33 @@ class Runner:
             image = image.to(self.__device)
             audio = audio.to(self.__device)
             yield (image, audio)
+
+    def __save_model(self, epoch, generator, discriminator_map):
+        log.info(f"saving model for epoch {epoch}")
+        models_folder = "models"
+        epoch_folder = "epoch_{}".format(epoch)
+        folder_path = os.path.join(self.__output_path, models_folder, epoch_folder)
+        Path(folder_path).mkdir(parents=True, exist_ok=True)
+        generator_path = os.path.join(folder_path, "generator.pt")
+        torch.save(generator.state_dict(), generator_path)
+
+        for k, v in discriminator_map.items():
+            dis_path = os.path.join(folder_path, k + '.pt')
+            torch.save(v.state_dict(), dis_path)
+
+    def __save_evaluation_data(self, epoch, sample, orig_data, generated_data):
+        if sample != 0:
+            return
+        data_folder = "data"
+        folder_path = os.path.join(self.__output_path, data_folder)
+        Path(folder_path).mkdir(parents=True, exist_ok=True)
+        data = {
+            'orig_data': orig_data,
+            'generated_data': generated_data,
+        }
+        data_path = os.path.join(folder_path, "data_{}.pkl".format(epoch))
+        with open(data_path, 'wb') as fd:
+            pickle.dump(data, fd)
 
     def start(self):
         self.__trainer.train()
