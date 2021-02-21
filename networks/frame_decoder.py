@@ -5,13 +5,13 @@ from torch import nn
 from nets import Deconv2dBlock, Unet2dBlock
 
 class FrameDecoder(nn.Module):
-    def __init__(self, input_channels = 394, start_hidden_channels = 1024, start_kernel = (3, 4), hidden_layers = 4, output_channels = 3):
+    def __init__(self, input_channels = 394, start_hidden_channels = 1024, start_kernel = (3, 4), hidden_layers = 4, output_channels = 3, device = "cpu"):
         super(FrameDecoder, self).__init__()
         self.__gate = Deconv2dBlock(
             in_channels = input_channels,
             out_channels = start_hidden_channels,
             kernel = start_kernel,
-        )
+        ).to(device)
         channels = start_hidden_channels
         kernel = 4
         stride = 2
@@ -27,7 +27,7 @@ class FrameDecoder(nn.Module):
                     kernel = kernel,
                     stride = stride,
                     padding = padding,
-                ),
+                ).to(device),
             )
             channels //= 2
         
@@ -40,7 +40,8 @@ class FrameDecoder(nn.Module):
                 padding = padding,
             ),
             nn.Tanh(),
-        )
+        ).to(device)
+        self.__device = device
 
     def forward(self, identity, audio, noise, forward_layers):
         '''
@@ -52,17 +53,18 @@ class FrameDecoder(nn.Module):
             raise Exception("number of forward features and hidden layers are not consistent")
         n_hidden = len(self.__hidden)
         batch_size = identity.shape[0]
-        x = torch.cat([identity, audio, noise], 1)
+        x = torch.cat([identity, audio, noise], 1).to(self.__device)
         x = x.view(*x.shape, 1, 1)
         x = self.__gate(x)
 
         for i, unet in enumerate(self.__hidden):
             s = forward_layers[n_hidden - 1 - i]
+            s = s.to(self.__device)
             x = unet(x, s)
         return self.__output_layer(x)
 
 if __name__ == "__main__":
-    fdec =   FrameDecoder()
+    fdec =   FrameDecoder(device = "cpu")
     identity = torch.ones(30, 128)
     audio = torch.ones(30, 256)
     noise = torch.ones(30, 10)

@@ -9,8 +9,9 @@ from sync_discriminator import SyncDiscriminator
 from generator import Generator
 
 class GeneratorTrainerInterface(Generator):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, device = "cpu"):
+        super().__init__(device = device)
+        self.__device = device
 
     def forward(self, orig_data):
         '''
@@ -20,6 +21,8 @@ class GeneratorTrainerInterface(Generator):
         output: (batch, channels, t, w, h)
         '''
         batch_image, batch_audio = orig_data
+        batch_image = batch_image.to(self.__device)
+        batch_audio = batch_audio.to(self.__device)
         batch_image = batch_image[:,:,0,:,:]
         batch_image = batch_image.squeeze(2)
         return super().forward(batch_image, batch_audio)
@@ -31,9 +34,10 @@ class GeneratorTrainerInterface(Generator):
         raise NotImplementedError()
 
 class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
-    def __init__(self, frame_stride = 5):
+    def __init__(self, frame_stride = 5, device = "cpu"):
         self.__frame_stride = frame_stride
-        super().__init__()
+        self.__device = device
+        super().__init__(device = device)
 
     def __aligned_audio_video_pairs(self, video, audio):
         return self.__missaligned_audio_video_pairs(video, audio, offset = 0)
@@ -68,8 +72,12 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
         orig_video, audio = orig_data
         gen_video = generated_data
 
+        orig_video = orig_video.to(self.__device)
+        audio = audio.to(self.__device)
+        gen_video = gen_video.to(self.__device)
+
         if not discriminator_training:
-            super().eval()
+            # super().eval()
             h = gen_video.shape[-1]
             gen_video = gen_video[:,:,:,:,h//2:]
             video, audio = self.__aligned_audio_video_pairs(gen_video, audio)
@@ -94,18 +102,19 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
     def suggested_generator_training_label(self, xhat):
         # return 1.0 vector (real)
         k = xhat.shape[0]
-        return Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        return Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False).to(self.__device)
 
     def suggested_discriminator_training_label(self, xhat):
         # return upper half 0.0 vector (fake), lower half 1.0 (real)
         k = xhat.shape[0]//2
         upper = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False)
         lower = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
-        return torch.cat([upper, lower], 0)
+        return torch.cat([upper, lower], 0).to(self.__device)
 
 class SequenceDiscriminatorTrainerInterface(SequenceDiscriminator):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, device = "cpu"):
+        super().__init__(device = device)
+        self.__device = device
 
     def forward(self, orig_data, generated_data, discriminator_training):
         '''
@@ -118,8 +127,12 @@ class SequenceDiscriminatorTrainerInterface(SequenceDiscriminator):
         orig_video, orig_audio = orig_data
         gen_video = generated_data
 
+        orig_video = orig_video.to(self.__device)
+        orig_audio = orig_audio.to(self.__device)
+        gen_video = gen_video.to(self.__device)
+
         if not discriminator_training:
-            super().eval()
+            # super().eval()
             xhat = super().forward(gen_video, orig_audio)
             return xhat.squeeze(1)
 
@@ -132,18 +145,19 @@ class SequenceDiscriminatorTrainerInterface(SequenceDiscriminator):
     def suggested_generator_training_label(self, xhat):
         # return 1.0 vector (real)
         k = xhat.shape[0]
-        return Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        return Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False).to(self.__device)
 
     def suggested_discriminator_training_label(self, xhat):
         # return upper half 0.0 vector (fake), lower half 1.0 (real)
         k = xhat.shape[0]//2
-        upper = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False)
-        lower = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        upper = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False).to(self.__device)
+        lower = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False).to(self.__device)
         return torch.cat([upper, lower], 0)
 
 class FrameDiscriminatorTrainerInterface(FrameDiscriminator):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, device = "cpu"):
+        super().__init__(device = device)
+        self.__device = device
 
     def forward(self, orig_data, generated_data, discriminator_training):
         '''
@@ -153,16 +167,21 @@ class FrameDiscriminatorTrainerInterface(FrameDiscriminator):
         batch_audio: (batch, channels, values)
         output: (batch, prob)
         '''
+        orig_video, _ = orig_data
+
+        orig_video = orig_video.to(self.__device)
+        generated_data = generated_data.to(self.__device)
+        
         generated_data = generated_data.transpose(1, 2)
         shape = generated_data.shape
         generated_data = generated_data.reshape(-1, *shape[2:])
 
         if not discriminator_training:
-            super().eval()
+            # super().eval()
             xhat = super().forward(generated_data)
             return xhat.squeeze(1)
 
-        orig_video, _ = orig_data
+        
         orig_video = orig_video.transpose(1, 2)
         shape = orig_video.shape
         orig_video = orig_video.reshape(-1, *shape[2:])
@@ -175,34 +194,40 @@ class FrameDiscriminatorTrainerInterface(FrameDiscriminator):
     def suggested_generator_training_label(self, xhat):
         # return 1.0 vector (real)
         k = xhat.shape[0]
-        return Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        return Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False).to(self.__device)
 
     def suggested_discriminator_training_label(self, xhat):
         # return upper half 0.0 vector (fake), lower half 1.0 (real)
         k = xhat.shape[0]//2
-        upper = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False)
-        lower = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        upper = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False).to(self.__device)
+        lower = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False).to(self.__device)
         return torch.cat([upper, lower], 0)
 
 class VideoL1Loss(nn.Module):
-    def __init__(self):
+    def __init__(self, device = "cpu"):
         super(VideoL1Loss, self).__init__()
+        super().to(device)
+        self.__device = device
 
     def forward(self, orig_data, generated_data):
         orig_video, _ = orig_data
+        orig_video = orig_video.to(self.__device)
+        generated_data = generated_data.to(self.__device)
+
         h = orig_video.shape[-1]
         orig_video = orig_video[:,:,:,:,h//2:]
         generated_data = generated_data[:,:,:,:,h//2:]
         return nn.functional.l1_loss(generated_data, orig_video)
 
 if __name__ == "__main__":
-    gen = GeneratorTrainerInterface()
-    sync = SyncDiscriminatorTrainerInterface()
-    seq = SequenceDiscriminatorTrainerInterface()
-    frame = FrameDiscriminatorTrainerInterface()
+    device = "cuda:0"
+    gen = GeneratorTrainerInterface(device = device)
+    sync = SyncDiscriminatorTrainerInterface(device = device)
+    seq = SequenceDiscriminatorTrainerInterface(device = device)
+    frame = FrameDiscriminatorTrainerInterface(device = device)
 
-    images = torch.randn(8, 3, 75, 96, 128)
-    audios = torch.randn(8, 1, 132300)
+    images = torch.randn(4, 3, 75, 96, 128).to(device)
+    audios = torch.randn(4, 1, 132300).to(device)
     orig_data = (images, audios)
 
     gen_data = gen(orig_data)
@@ -235,20 +260,21 @@ if __name__ == "__main__":
     print(f"total loss: {total_loss}")
     total_loss.backward()
 
+    gen_data = gen_data.detach()
     xhat = sync(orig_data, gen_data, True)
     y = sync.suggested_discriminator_training_label(xhat)
     print(f"sync-train shape: {xhat.shape}")
     sync_loss = nn.functional.binary_cross_entropy(xhat, y)
-    sync_loss.backward()
+    sync_loss.backward(retain_graph=True)
 
     xhat = seq(orig_data, gen_data, True)
     y = seq.suggested_discriminator_training_label(xhat)
     print(f"seq-train shape: {xhat.shape}")
     seq_loss = nn.functional.binary_cross_entropy(xhat, y)
-    seq_loss.backward()
+    seq_loss.backward(retain_graph=True)
 
     xhat = frame(orig_data, gen_data, True)
     y = frame.suggested_discriminator_training_label(xhat)
     print(f"frame-train shape: {xhat.shape}")
     frame_loss = nn.functional.binary_cross_entropy(xhat, y)
-    frame_loss.backward()
+    frame_loss.backward(retain_graph=True)

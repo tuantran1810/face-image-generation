@@ -18,11 +18,12 @@ class GansTrainer:
     def __init__(
         self,
         epochs,
+        device = "cpu",
         discriminator_generator_training_ratio = 1,
         log_interval_second = 30,
         logger = loguru.logger,
     ):
-        self.__device: str = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.__device: str = device
         self.__generator_module: Optional[GansModule] = None
         self.__discriminator_modules: dict[str, GansModule] = dict()
 
@@ -88,6 +89,7 @@ class GansTrainer:
         now = time.time()
         if now - self.__last_log_time < self.__log_interval_second:
             return
+        self.__last_log_time = now
         self.__metric_log(epoch, sample, metrics)
 
     def __generate(self, data, with_grad = True):
@@ -123,7 +125,7 @@ class GansTrainer:
                 for _, discriminator in self.__discriminator_modules.items():
                     dis = discriminator.model
                     xhat = dis(orig_data, generated_data, discriminator_training = False)
-                    y = dis.suggested_generator_training_label(xhat).to(self.__device)
+                    y = dis.suggested_generator_training_label(xhat)
                     loss = discriminator.loss_function(xhat, y)
                     all_loss.append(loss)
 
@@ -143,7 +145,7 @@ class GansTrainer:
                     discriminator.optim.zero_grad()
                     dis = discriminator.model
                     xhat = dis(orig_data, generated_data, discriminator_training = True)
-                    y = dis.suggested_discriminator_training_label(xhat).to(self.__device)
+                    y = dis.suggested_discriminator_training_label(xhat)
                     loss = discriminator.loss_function(xhat, y)
                     loss.backward()
                     discriminator.optim.step()
@@ -165,7 +167,7 @@ class GansTrainer:
                         for _, discriminator in self.__discriminator_modules.items():
                             dis = discriminator.model
                             xhat = dis(orig_data, generated_data, discriminator_training = False)
-                            y = dis.suggested_generator_training_label(xhat).to(self.__device)
+                            y = dis.suggested_generator_training_label(xhat)
                             loss = discriminator.loss_function(xhat, y)
                             all_loss.append(loss)
 
@@ -181,8 +183,8 @@ class GansTrainer:
 
                         for d_name, discriminator in self.__discriminator_modules.items():
                             dis = discriminator.model
-                            xhat = dis(orig_data, generated_data, discriminator_training = False)
-                            y = dis.suggested_discriminator_training_label(xhat).to(self.__device)
+                            xhat = dis(orig_data, generated_data, discriminator_training = True)
+                            y = dis.suggested_discriminator_training_label(xhat)
                             loss = discriminator.loss_function(xhat, y)
                             l_name = d_name + '_loss'
                             if l_name in metrics:

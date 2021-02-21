@@ -5,7 +5,7 @@ from torch import nn
 from nets import Conv2dBlock
 
 class IdentityEncoder(nn.Module):
-    def __init__(self, input_channels = 3, start_hidden_channels = 64, hidden_layers = 4, output_channels = 128):
+    def __init__(self, input_channels = 3, start_hidden_channels = 64, hidden_layers = 4, output_channels = 128, device = "cpu"):
         super(IdentityEncoder, self).__init__()
 
         kernel = (4, 4)
@@ -56,13 +56,15 @@ class IdentityEncoder(nn.Module):
         )
         layers.append(final_layer)
 
-        self.__layers = nn.Sequential(*layers)
+        self.__layers = nn.Sequential(*layers).to(device)
+        self.__device = device
 
     def forward(self, x):
         '''
         x: (batch_size, channels, w, h)
         output: (batch_size, vector) for encoded vector, (batch_size, channels, w, h) for hidden layers
         '''
+        x = x.to(self.__device)
         batch_size = x.shape[0]
         lst = []
         for layer in self.__layers:
@@ -74,7 +76,7 @@ class IdentityEncoder(nn.Module):
 
 if __name__ == "__main__":
     x = torch.ones(5, 3, 96, 128)
-    i_enc = IdentityEncoder()
+    i_enc = IdentityEncoder(device = "cpu")
     y, lst = i_enc(x)
     print(i_enc)
     for out in lst:

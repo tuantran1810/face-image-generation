@@ -5,7 +5,7 @@ from torch import nn
 from nets import Conv2dBlock
 
 class FrameDiscriminator(nn.Module):
-    def __init__(self, input_channels = 3, start_hidden_channels = 32, hidden_layers = 5):
+    def __init__(self, input_channels = 3, start_hidden_channels = 32, hidden_layers = 5, device = "cpu"):
         super(FrameDiscriminator, self).__init__()
         kernel = (4, 4)
         stride = 2
@@ -47,14 +47,16 @@ class FrameDiscriminator(nn.Module):
             w = 1
             h = 1
 
-        self.__fc =nn.Linear(in_features = channels * w * h, out_features = 1)
-        self.__layers = nn.Sequential(*layers)
+        self.__fc = nn.Linear(in_features = channels * w * h, out_features = 1).to(device)
+        self.__layers = nn.Sequential(*layers).to(device)
+        self.__device = device
 
     def forward(self, x):
         '''
         x: (batch, channels, w, h)
         output: (batch, prob)
         '''
+        x = x.to(self.__device)
         batch_size = x.shape[0]
         x = self.__layers(x)
         x = x.view(batch_size, -1)
@@ -62,7 +64,7 @@ class FrameDiscriminator(nn.Module):
         return torch.sigmoid(x)
 
 if __name__ == "__main__":
-    fd = FrameDiscriminator()
+    fd = FrameDiscriminator(device = "cpu")
     x = torch.ones(30, 3, 96, 128)
     y = fd(x)
     print(y.shape)

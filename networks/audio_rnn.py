@@ -12,15 +12,17 @@ class AudioRNN(nn.Module):
         output_dims = 256,
         hidden_gru_layers = 2,
         batch_mode = True,
+        device = "cpu",
     ):
         super(AudioRNN, self).__init__()
         self.__batch_mode = batch_mode
-        self.__enc = AudioEncoder(input_dims = chunk_size, input_channels = 1, output_dims = output_dims)
-        self.__gru = nn.GRU(input_size = output_dims, hidden_size = output_dims, num_layers = hidden_gru_layers, batch_first = True)
+        self.__enc = AudioEncoder(input_dims = chunk_size, input_channels = 1, output_dims = output_dims, device = device)
+        self.__gru = nn.GRU(input_size = output_dims, hidden_size = output_dims, num_layers = hidden_gru_layers, batch_first = True).to(device)
         self.__stride = sampling_rate//frame_rate
         padding_size = (chunk_size - self.__stride)//2
-        self.__padding = nn.ZeroPad2d((padding_size, padding_size, 0, 0))
+        self.__padding = nn.ZeroPad2d((padding_size, padding_size, 0, 0)).to(device)
         self.__chunk_size = chunk_size
+        self.__device = device
 
     def __padding1D(self, x):
         x = torch.unsqueeze(x, 2)
@@ -44,6 +46,7 @@ class AudioRNN(nn.Module):
         x: (batch_size, channels, data)
         output: (batch_size, sequence, data)
         '''
+        x = x.to(self.__device)
         batch_size = x.shape[0]
         x = self.__padding1D(x)
         if self.__batch_mode:
@@ -61,7 +64,7 @@ class AudioRNN(nn.Module):
         return out
 
 if __name__ == "__main__":
-    au_rnn = AudioRNN()
+    au_rnn = AudioRNN(device = "cpu")
     print(au_rnn)
     x = torch.ones(30, 1, 132300)
     y = au_rnn(x)

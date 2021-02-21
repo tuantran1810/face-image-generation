@@ -6,17 +6,21 @@ from audio_encoder import AudioEncoder
 from mouth_sequence_encoder import MouthSequenceEncoder
 
 class SyncDiscriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, device = "cpu"):
         super(SyncDiscriminator, self).__init__()
-        self.__aenc = AudioEncoder()
-        self.__menc = MouthSequenceEncoder()
-        self.__fc = nn.Linear(256, 1)
+        self.__aenc = AudioEncoder(device = device)
+        self.__menc = MouthSequenceEncoder(device = device)
+        self.__fc = nn.Linear(256, 1).to(device)
+        self.__device = device
 
     def forward(self, images, audio):
         '''
         images: (batch, channels, t, w, h)
         audio: (batch, channels, values)
+        output: (batch, values)
         '''
+        images = images.to(self.__device)
+        audio = audio.to(self.__device)
         if images.shape[0] != audio.shape[0]:
             raise Exception("batch size of images and audio are not consistent")
         audio_feature = self.__aenc(audio)
@@ -27,7 +31,7 @@ class SyncDiscriminator(nn.Module):
         return torch.sigmoid(x)
 
 if __name__ == "__main__":
-    s_dis = SyncDiscriminator()
+    s_dis = SyncDiscriminator(device = "cpu")
     images = torch.ones(7, 3, 5, 96, 64)
     audio = torch.ones(7, 1, 8820)
     y = s_dis(images, audio)

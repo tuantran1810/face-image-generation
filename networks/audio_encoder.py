@@ -5,7 +5,7 @@ from torch import nn
 from nets import Conv1dBlock
 
 class AudioEncoder(nn.Module):
-    def __init__(self, input_dims = 8000, input_channels = 1, output_dims = 256, hidden_layers = 4):
+    def __init__(self, input_dims = 8000, input_channels = 1, output_dims = 256, hidden_layers = 4, device = "cpu"):
         super(AudioEncoder, self).__init__()
         channels = 16
         layers = [
@@ -51,17 +51,19 @@ class AudioEncoder(nn.Module):
             nn.Tanh(),
         )
         layers.append(final_layer)
-        self.__layers = nn.Sequential(*layers)
+        self.__layers = nn.Sequential(*layers).to(device)
+        self.__device = device
 
     def forward(self, x):
         '''
         x: (batch_size, channels, data)
         output: (batch_size, encoded_data)
         '''
+        x = x.to(self.__device)
         return self.__layers(x).squeeze(2)
 
 if __name__ == "__main__":
     x = torch.ones(3, 1, 8820)
-    aenc = AudioEncoder()
+    aenc = AudioEncoder(device = "cpu")
     print(aenc)
     print(aenc(x).shape)

@@ -8,12 +8,13 @@ from frame_decoder import FrameDecoder
 from noise_rnn import NoiseRNN
 
 class Generator(nn.Module):
-    def __init__(self):
+    def __init__(self, device = "cpu"):
         super(Generator, self).__init__()
-        self.__audio_rnn = AudioRNN()
-        self.__identity_enc = IdentityEncoder()
-        self.__noise_enc = NoiseRNN()
-        self.__frame_dec = FrameDecoder()
+        self.__audio_rnn = AudioRNN(device = device)
+        self.__identity_enc = IdentityEncoder(device = device)
+        self.__noise_enc = NoiseRNN(device = device)
+        self.__frame_dec = FrameDecoder(device = device)
+        self.__device = device
 
     def forward(self, images, audios):
         '''
@@ -21,6 +22,9 @@ class Generator(nn.Module):
         audios: (batch, channels, data)
         output: (batch, channels, sequence, w, h)
         '''
+        images = images.to(self.__device)
+        audios = audios.to(self.__device)
+
         batch_size = images.shape[0]
         if images.shape[0] != audios.shape[0]:
             raise Exception("batch size of images and audios are not consistent")
@@ -47,7 +51,7 @@ class Generator(nn.Module):
         return output
 
 if __name__ == "__main__":
-    gen = Generator()
+    gen = Generator(device = "cpu")
     images = torch.randn(2, 3, 96, 128)
     audios = torch.randn(2, 1, 132300)
     print(gen)
