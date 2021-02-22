@@ -81,7 +81,7 @@ class GansTrainer:
     def __metric_log(self, epoch, sample, metrics):
         lst = []
         for k, v in metrics.items():
-            lst.append("{}: {:.6f}".format(k, v))
+            lst.append("{}: {:.4E}".format(k, v))
         body = ", ".join(lst)
         self.__log(f"[epoch {epoch} --- sample {sample}] {body}")
 
@@ -193,7 +193,7 @@ class GansTrainer:
                                 metrics[d_name + '_loss'] = loss
                         
                         if self.__evaluation_callback is not None:
-                            self.__evaluation_callback(epoch, i, orig_data, generated_data)
+                            self.__evaluation_callback(epoch, i, metrics, orig_data, generated_data)
                 
                 for k, v in metrics.items():
                     metrics[k] = v/cnt

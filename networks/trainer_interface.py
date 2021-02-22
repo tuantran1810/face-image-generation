@@ -204,10 +204,11 @@ class FrameDiscriminatorTrainerInterface(FrameDiscriminator):
         return torch.cat([upper, lower], 0)
 
 class VideoL1Loss(nn.Module):
-    def __init__(self, device = "cpu"):
+    def __init__(self, weight = 1.0, device = "cpu"):
         super(VideoL1Loss, self).__init__()
         super().to(device)
         self.__device = device
+        self.__weight = weight
 
     def forward(self, orig_data, generated_data):
         orig_video, _ = orig_data
@@ -217,7 +218,20 @@ class VideoL1Loss(nn.Module):
         h = orig_video.shape[-1]
         orig_video = orig_video[:,:,:,:,h//2:]
         generated_data = generated_data[:,:,:,:,h//2:]
-        return nn.functional.l1_loss(generated_data, orig_video)
+        return nn.functional.l1_loss(generated_data, orig_video)*self.__weight
+
+class WeightedBCELoss(nn.Module):
+    def __init__(self, weight = 1.0, device = "cpu"):
+        super(WeightedBCELoss, self).__init__()
+        super().to(device)
+        self.__device = device
+        self.__weight = weight
+
+    def forward(self, xhat, target):
+        xhat = xhat.to(self.__device)
+        target = target.to(self.__device)
+        loss = nn.functional.l1_loss(xhat, target) * self.__weight
+        return loss
 
 if __name__ == "__main__":
     device = "cuda:0"
