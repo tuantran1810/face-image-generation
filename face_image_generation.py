@@ -10,6 +10,7 @@ from frameworks.gans_trainer import GansTrainer, GansModule
 from utils.path_dataset import PathDataset
 import pickle
 from loguru import logger as log
+from matplotlib import pyplot as plt
 
 class Runner:
     def __init__(
@@ -18,6 +19,7 @@ class Runner:
         train_datapath = "/media/tuantran/rapid-data/dataset/GRID/face_images",
         test_datapath = "./grid-dataset/samples/",
         output_path = "./trainer_output/",
+        pretrained_model_paths = dict(),
         lr = 0.001,
         epochs = 10,
     ):
@@ -33,6 +35,10 @@ class Runner:
         self.__trainer.inject_save_model_callback(self.__save_model)
 
         generator = GeneratorTrainerInterface(device = device)
+        if 'generator' in pretrained_model_paths:
+            path = pretrained_model_paths['generator']
+            generator.load_state_dict(torch.load(path))
+
         generator_module = GansModule (
             model = generator,
             optim = optim.Adam(generator.parameters(), lr = lr),
@@ -48,6 +54,9 @@ class Runner:
             ("seq_dis", seq_dis, 0.2),
             ("frame_dis", frame_dis, 1.0),
         ]:
+            if name in pretrained_model_paths:
+                path = pretrained_model_paths[name]
+                dis.load_state_dict(torch.load(path))
             dis_module = GansModule(
                 model = dis,
                 optim = optim.Adam(dis.parameters(), lr = lr),
@@ -136,9 +145,54 @@ class Runner:
     def start(self):
         self.__trainer.train()
 
+def get_config():
+    config = dict()
+
+    torch_device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = os.getenv('FIG_DEVICE')
+    device = device if device is not None else torch_device
+    config['device'] = device
+
+    default_train_datapath = "/media/tuantran/rapid-data/dataset/GRID/face_images"
+    train_datapath = os.getenv('FIG_TRAIN_DATAPATH')
+    train_datapath = train_datapath if train_datapath is not None else default_train_datapath
+    config['train_datapath'] = train_datapath
+
+    default_test_datapath = "./grid-dataset/samples/"
+    test_datapath = os.getenv('FIG_TEST_DATAPATH')
+    test_datapath = test_datapath if test_datapath is not None else default_test_datapath
+    config['test_datapath'] = test_datapath
+
+    default_output_path = "./trainer_output/"
+    output_path = os.getenv('FIG_OUTPUT_PATH')
+    output_path = output_path if output_path is not None else default_output_path
+    config['output_path'] = output_path
+
+    default_pretrained_model_path = "./trainer_output/models/final"
+    pretrained_model_path = os.getenv('FIG_PRETRAINED_MODEL_PATH')
+    pretrained_model_path = pretrained_model_path if pretrained_model_path is not None else default_pretrained_model_path
+    pretrained_model_paths = {}
+    if os.path.exists(pretrained_model_path):
+        lst = set(os.listdir(pretrained_model_path))
+        for name in ['generator', 'sync_dis', 'frame_dis', 'seq_dis']:
+            filename = name + '.pt'
+            if filename not in lst:
+                break
+            pretrained_model_paths[name] = os.path.join(pretrained_model_path, filename)
+    if len(pretrained_model_paths) == 4:
+        config['pretrained_model_paths'] = pretrained_model_paths
+
+    default_epochs = 10
+    epochs = os.getenv('FIG_EPOCHS')
+    epochs = int(epochs) if epochs is not None else default_epochs
+    config['epochs'] = epochs
+
+    return config
+
 def main():
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    runner = Runner(device = device)
+    config = get_config()
+    log.info("Running with config: {}".format(config))
+    runner = Runner(**config)
     runner.start()
 
 if __name__ == "__main__":
