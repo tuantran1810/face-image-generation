@@ -21,11 +21,12 @@ class Runner:
         output_path = "./trainer_output/",
         pretrained_model_paths = dict(),
         lr = 0.001,
+        batchsize = 2,
         epochs = 10,
     ):
         self.__output_path = output_path
-        self.__train_dataloader = self.__create_dataloader(train_datapath, 2)
-        self.__test_dataloader = self.__create_dataloader(test_datapath, 2)
+        self.__train_dataloader = self.__create_dataloader(train_datapath, batchsize)
+        self.__test_dataloader = self.__create_dataloader(test_datapath, batchsize)
         
         self.__trainer = GansTrainer(epochs = epochs, device = device)
 
@@ -134,8 +135,13 @@ class Runner:
         data_folder = "data"
         folder_path = os.path.join(self.__output_path, data_folder)
         Path(folder_path).mkdir(parents=True, exist_ok=True)
+        orig_video, audio = orig_data
+        generated_data = generated_data.detach().cpu().numpy()
+        orig_video = orig_video.detach().cpu().numpy()
+        audio = audio.detach().cpu().numpy()
         data = {
-            'orig_data': orig_data,
+            'orig_video': orig_video,
+            'audio': audio,
             'generated_data': generated_data,
         }
         data_path = os.path.join(folder_path, "data_{}.pkl".format(epoch))
@@ -186,6 +192,11 @@ def get_config():
     epochs = os.getenv('FIG_EPOCHS')
     epochs = int(epochs) if epochs is not None else default_epochs
     config['epochs'] = epochs
+
+    default_batchsize = 2
+    batchsize = os.getenv('FIG_BATCHSIZE')
+    batchsize = int(batchsize) if batchsize is not None else default_batchsize
+    config['batchsize'] = batchsize
 
     return config
 
