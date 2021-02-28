@@ -3,6 +3,7 @@ sys.path.append(os.path.dirname(__file__))
 from pathlib import Path
 import torch
 from torch import nn, optim
+from torchvision.transforms.functional import normalize
 from torch.utils.data import DataLoader
 import numpy as np
 from networks.trainer_interface import *
@@ -20,7 +21,6 @@ class Runner:
         test_datapath = "./grid-dataset/samples/",
         output_path = "./trainer_output/",
         pretrained_model_paths = dict(),
-        lr = 0.001,
         batchsize = 2,
         epochs = 10,
     ):
@@ -42,7 +42,7 @@ class Runner:
 
         generator_module = GansModule (
             model = generator,
-            optim = optim.Adam(generator.parameters(), lr = lr),
+            optim = optim.Adam(generator.parameters(), lr = 0.0001),
             loss_function = None,
         )
         self.__trainer.inject_generator(generator_module)
@@ -50,10 +50,10 @@ class Runner:
         sync_dis = SyncDiscriminatorTrainerInterface(device = device)
         seq_dis = SequenceDiscriminatorTrainerInterface(device = device)
         frame_dis = FrameDiscriminatorTrainerInterface(device = device)
-        for name, dis, w in [
-            ("sync_dis", sync_dis, 0.8),
-            ("seq_dis", seq_dis, 0.2),
-            ("frame_dis", frame_dis, 1.0),
+        for name, dis, w, lr in [
+            ("sync_dis", sync_dis, 1.0, 0.00001),
+            ("seq_dis", seq_dis, 1.0, 0.00001),
+            ("frame_dis", frame_dis, 1.0, 0.0001),
         ]:
             if name in pretrained_model_paths:
                 path = pretrained_model_paths[name]
@@ -65,7 +65,7 @@ class Runner:
             )
             self.__trainer.inject_discriminator(name, dis_module)
 
-        self.__trainer.inject_other_loss_function("l1_loss", VideoL1Loss(weight = 600.0, device = device))
+        self.__trainer.inject_other_loss_function("l1_loss", VideoL1Loss(weight = 2.0, device = device))
         self.__device = device
         
     def __create_dataloader(self, rootpath, batchsize):
@@ -80,19 +80,23 @@ class Runner:
         def data_processing(fd):
             data = pickle.load(fd)
             video = data['video']
-            video = np.transpose(video, (1, 0, 2, 3))
+            video = torch.tensor(video).float()
+            video = normalize(video, [128, 128, 128], [128, 128, 128])
+            video = video.transpose(0, 1)
             video_frames = video.shape[1]
             if video_frames > 75:
                 video = video[:,:75,:,:]
             elif video_frames < 75:
                 more_frames = 75 - video_frames
-                dup_frame = np.expand_dims(video[:,-1,:,:], axis = 1)
-                frames = np.repeat(dup_frame, more_frames, 1)
-                video = np.concatenate([video, frames], axis = 1)
-            video = torch.tensor(video/255.0).float()
-            audio = data['audio']/32768.0
+                dup_frame = torch.unsqueeze(video[:,-1,:,:], dim = 1)
+                frames = dup_frame.repeat(1, more_frames, 1, 1)
+                video = torch.cat([video, frames], dim = 1)
+
+            audio = data['audio'].astype(np.float)
+            audio = audio/audio.max()
             audio = np.pad(audio, (486, 486), 'constant', constant_values = (0, 0))
             audio = torch.tensor(np.expand_dims(audio, axis = 0)).float()
+
             return (video, audio)
 
         dataset = PathDataset(data_paths, data_processing)
@@ -137,8 +141,12 @@ class Runner:
         Path(folder_path).mkdir(parents=True, exist_ok=True)
         orig_video, audio = orig_data
         generated_data = generated_data.detach().cpu().numpy()
+        generated_data = 125.0 * generated_data + 125.0
+        generated_data = generated_data.astype(np.uint8)
         orig_video = orig_video.detach().cpu().numpy()
-        audio = audio.detach().cpu().numpy()
+        orig_video = 125.0 * orig_video + 125.0
+        orig_video = orig_video.astype(np.uint8)
+        audio = (audio.detach().cpu().numpy() * (2 ** 15)).astype(np.int16)
         data = {
             'orig_video': orig_video,
             'audio': audio,

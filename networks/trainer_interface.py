@@ -76,26 +76,33 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
         audio = audio.to(self.__device)
         gen_video = gen_video.to(self.__device)
 
+        h = orig_video.shape[-1]
+        orig_video = orig_video[:,:,:,:,h//2:]
+        gen_video = gen_video[:,:,:,:,h//2:]
+
         if not discriminator_training:
             # super().eval()
-            h = gen_video.shape[-1]
-            gen_video = gen_video[:,:,:,:,h//2:]
             video, audio = self.__aligned_audio_video_pairs(gen_video, audio)
             xhat = super().forward(video, audio)
             return xhat.squeeze(1)
 
         super().train()
-        h = orig_video.shape[-1]
-        orig_video = orig_video[:,:,:,:,h//2:]
         batch_size = orig_video.shape[0]
-        upper_half_video = orig_video[:batch_size//2]
-        lower_half_video = orig_video[batch_size//2:]
-        upper_half_audio = audio[:batch_size//2]
-        lower_half_audio = audio[batch_size//2:]
-        upper_half_video, upper_half_audio = self.__aligned_audio_video_pairs(upper_half_video, upper_half_audio)
-        lower_half_video, lower_half_audio = self.__missaligned_audio_video_pairs(lower_half_video, lower_half_audio)
-        video = torch.cat([upper_half_video, lower_half_video], 0)
-        audio = torch.cat([upper_half_audio, lower_half_audio], 0)
+
+        upper_video = orig_video
+        middle_video = orig_video[:batch_size//2]
+        lower_video = gen_video[batch_size//2:]
+
+        upper_audio = audio
+        middle_audio = audio[:batch_size//2]
+        lower_audio = audio[batch_size//2:]
+
+        upper_video, upper_audio = self.__aligned_audio_video_pairs(upper_video, upper_audio)
+        middle_video, middle_audio = self.__missaligned_audio_video_pairs(middle_video, middle_audio)
+        lower_video, lower_audio = self.__aligned_audio_video_pairs(lower_video, lower_audio)
+
+        video = torch.cat([upper_video, middle_video, lower_video], 0)
+        audio = torch.cat([upper_audio, middle_audio, lower_audio], 0)
         xhat = super().forward(video, audio)
         return xhat.squeeze(1)
 
@@ -107,8 +114,8 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
     def suggested_discriminator_training_label(self, xhat):
         # return upper half 0.0 vector (fake), lower half 1.0 (real)
         k = xhat.shape[0]//2
-        upper = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False)
-        lower = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        upper = Variable(torch.FloatTensor(k).fill_(1.0), requires_grad=False)
+        lower = Variable(torch.FloatTensor(k).fill_(0.0), requires_grad=False)
         return torch.cat([upper, lower], 0).to(self.__device)
 
 class SequenceDiscriminatorTrainerInterface(SequenceDiscriminator):
