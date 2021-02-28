@@ -39,27 +39,57 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
         self.__device = device
         super().__init__(device = device)
 
-    def __aligned_audio_video_pairs(self, video, audio):
-        return self.__missaligned_audio_video_pairs(video, audio, offset = 0)
-
-    def __missaligned_audio_video_pairs(self, video, audio, offset = 1):
+    def __missaligned_audio_video_pairs(self, video, audio, nsamples = 25):
         video_shape = video.shape
+        batchsize = video_shape[0]
         frames_per_video = video_shape[2]
         t_audio = audio.shape[-1]
 
-        samples_per_video = frames_per_video//self.__frame_stride
-        audio_stride = (t_audio//frames_per_video)*self.__frame_stride
+        single_audio_stride = int(t_audio/frames_per_video)
+        audio_stride = single_audio_stride*self.__frame_stride
 
+        batch_samples = torch.randint(high=batchsize, size=(nsamples,))
+        video_samples = torch.randint(high=frames_per_video-self.__frame_stride, size=(nsamples,))
+        audio_samples = torch.randint(high=t_audio-audio_stride, size=(nsamples,))
         tmp_audio_arr = []
         tmp_video_arr = []
-        for i in range(samples_per_video):
-            j = (i+offset)%samples_per_video
-            tmp_audio = audio[:,:,(j*audio_stride):((j+1)*audio_stride)]
-            tmp_video = video[:,:,(i*self.__frame_stride):((i+1)*self.__frame_stride),:,:]
-            tmp_audio_arr.append(tmp_audio)
-            tmp_video_arr.append(tmp_video)
+        for i in range(nsamples):
+            i_batch = batch_samples[i]
+            i_video = video_samples[i]
+            i_audio = audio_samples[i]
+            v = video[i_batch,:,i_video:i_video+self.__frame_stride,:,:].unsqueeze(0)
+            a = audio[i_batch,:,i_audio:i_audio+audio_stride].unsqueeze(0)
+            tmp_video_arr.append(v)
+            tmp_audio_arr.append(a)
+
+        out_video, out_audio = torch.cat(tmp_video_arr, 0), torch.cat(tmp_audio_arr, 0)
+        return out_video, out_audio
+
+    def __aligned_audio_video_pairs(self, video, audio, nsamples = 25):
+        video_shape = video.shape
+        batchsize = video_shape[0]
+        frames_per_video = video_shape[2]
+        t_audio = audio.shape[-1]
+
+        single_audio_stride = int(t_audio/frames_per_video)
+        audio_stride = single_audio_stride*self.__frame_stride
+
+        batch_samples = torch.randint(high=batchsize, size=(nsamples,))
+        video_samples = torch.randint(high=frames_per_video-self.__frame_stride, size=(nsamples,))
+        tmp_audio_arr = []
+        tmp_video_arr = []
+        for i in range(nsamples):
+            i_batch = batch_samples[i]
+            i_video = video_samples[i]
+            v = video[i_batch,:,i_video:i_video+self.__frame_stride,:,:].unsqueeze(0)
+            i_audio = i_video * single_audio_stride
+            a = audio[i_batch,:,i_audio:i_audio+audio_stride].unsqueeze(0)
+            tmp_video_arr.append(v)
+            tmp_audio_arr.append(a)
         
-        return torch.cat(tmp_video_arr, 0), torch.cat(tmp_audio_arr, 0)
+        out_video, out_audio = torch.cat(tmp_video_arr, 0), torch.cat(tmp_audio_arr, 0)
+
+        return out_video, out_audio
 
     def forward(self, orig_data, generated_data, discriminator_training):
         '''
@@ -87,19 +117,10 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
             return xhat.squeeze(1)
 
         super().train()
-        batch_size = orig_video.shape[0]
 
-        upper_video = orig_video
-        middle_video = orig_video[:batch_size//2]
-        lower_video = gen_video[batch_size//2:]
-
-        upper_audio = audio
-        middle_audio = audio[:batch_size//2]
-        lower_audio = audio[batch_size//2:]
-
-        upper_video, upper_audio = self.__aligned_audio_video_pairs(upper_video, upper_audio)
-        middle_video, middle_audio = self.__missaligned_audio_video_pairs(middle_video, middle_audio)
-        lower_video, lower_audio = self.__aligned_audio_video_pairs(lower_video, lower_audio)
+        upper_video, upper_audio = self.__aligned_audio_video_pairs(orig_video, audio, nsamples = 30)
+        middle_video, middle_audio = self.__missaligned_audio_video_pairs(orig_video, audio, nsamples = 15)
+        lower_video, lower_audio = self.__aligned_audio_video_pairs(gen_video, audio, nsamples = 15)
 
         video = torch.cat([upper_video, middle_video, lower_video], 0)
         audio = torch.cat([upper_audio, middle_audio, lower_audio], 0)

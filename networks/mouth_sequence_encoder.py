@@ -43,10 +43,10 @@ class MouthSequenceEncoder(nn.Module):
                 break
         self.__layers = nn.Sequential(*layers).to(device)
         self.__output = nn.Sequential(
-            Conv2dBlock(
+            nn.Conv2d(
                 in_channels = channels,
                 out_channels = out_features,
-                kernel = kernel,
+                kernel_size = kernel,
                 stride = stride,
                 padding = padding,
             ),

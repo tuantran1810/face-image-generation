@@ -8,8 +8,10 @@ from frame_decoder import FrameDecoder
 from noise_rnn import NoiseRNN
 
 class Generator(nn.Module):
-    def __init__(self, device = "cpu"):
+    def __init__(self, noise_mean=0.0, noise_std=0.33, device = "cpu"):
         super(Generator, self).__init__()
+        self.__noise_mean = noise_mean
+        self.__noise_std = noise_std
         self.__audio_rnn = AudioRNN(device = device)
         self.__identity_enc = IdentityEncoder(device = device)
         self.__noise_enc = NoiseRNN(device = device)
@@ -31,7 +33,7 @@ class Generator(nn.Module):
         id_feature, skip_features = self.__identity_enc(images)
         audio_feature = self.__audio_rnn(audios)
         t = audio_feature.shape[1]
-        noise = torch.randn(batch_size, t, 10)
+        noise = torch.FloatTensor(batch_size, t, 10).normal_(self.__noise_mean, self.__noise_std)
         noise_feature = self.__noise_enc(noise)
 
         total_batch = t * batch_size
