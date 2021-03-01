@@ -28,6 +28,8 @@ def __gen_videos(videos):
     videos = np.transpose(videos, (0,2,3,4,1))
     for k in range(batchsize):
         out = videos[k]
+        for i in range(out.shape[0]):
+            out[i] = cv2.cvtColor(out[i], cv2.COLOR_BGR2RGB)
         vidwrite("./output_{}.mp4".format(k), out, vcodec='libx264', fps=25)
 
 def __show_models(rootpath='./model'):

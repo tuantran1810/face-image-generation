@@ -118,9 +118,9 @@ class SyncDiscriminatorTrainerInterface(SyncDiscriminator):
 
         super().train()
 
-        upper_video, upper_audio = self.__aligned_audio_video_pairs(orig_video, audio, nsamples = 30)
-        middle_video, middle_audio = self.__missaligned_audio_video_pairs(orig_video, audio, nsamples = 15)
-        lower_video, lower_audio = self.__aligned_audio_video_pairs(gen_video, audio, nsamples = 15)
+        upper_video, upper_audio = self.__aligned_audio_video_pairs(orig_video, audio, nsamples = 60)
+        middle_video, middle_audio = self.__missaligned_audio_video_pairs(orig_video, audio, nsamples = 30)
+        lower_video, lower_audio = self.__aligned_audio_video_pairs(gen_video, audio, nsamples = 30)
 
         video = torch.cat([upper_video, middle_video, lower_video], 0)
         audio = torch.cat([upper_audio, middle_audio, lower_audio], 0)

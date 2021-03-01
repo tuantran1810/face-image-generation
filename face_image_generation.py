@@ -53,7 +53,7 @@ class Runner:
         for name, dis, w, lr in [
             ("sync_dis", sync_dis, 1.0, 0.00001),
             ("seq_dis", seq_dis, 1.0, 0.00001),
-            ("frame_dis", frame_dis, 1.0, 0.0001),
+            ("frame_dis", frame_dis, 100.0, 0.0001),
         ]:
             if name in pretrained_model_paths:
                 path = pretrained_model_paths[name]
@@ -65,7 +65,7 @@ class Runner:
             )
             self.__trainer.inject_discriminator(name, dis_module)
 
-        self.__trainer.inject_other_loss_function("l1_loss", VideoL1Loss(weight = 2.0, device = device))
+        self.__trainer.inject_other_loss_function("l1_loss", VideoL1Loss(weight = 200.0, device = device))
         self.__device = device
         
     def __create_dataloader(self, rootpath, batchsize):
