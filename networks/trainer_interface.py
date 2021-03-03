@@ -258,7 +258,7 @@ class WeightedBCELoss(nn.Module):
     def forward(self, xhat, target):
         xhat = xhat.to(self.__device)
         target = target.to(self.__device)
-        loss = nn.functional.l1_loss(xhat, target) * self.__weight
+        loss = nn.functional.binary_cross_entropy(xhat, target) * self.__weight
         return loss
 
 if __name__ == "__main__":
