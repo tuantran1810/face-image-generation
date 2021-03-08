@@ -242,10 +242,6 @@ class VideoL1Loss(nn.Module):
         orig_video, _ = orig_data
         orig_video = orig_video.to(self.__device)
         generated_data = generated_data.to(self.__device)
-
-        h = orig_video.shape[-1]
-        orig_video = orig_video[:,:,:,:,h//2:]
-        generated_data = generated_data[:,:,:,:,h//2:]
         return nn.functional.l1_loss(generated_data, orig_video)*self.__weight
 
 class WeightedBCELoss(nn.Module):
