@@ -61,11 +61,12 @@ def main():
         print(mp.keys())
     orig_data = mp['orig_video']
     generated_data = mp['generated_data']
+    combined = np.concatenate((orig_data, generated_data), axis = -1)
     audio = mp['audio']
 
     # __show_images(orig_data)
     # __show_images(generated_data)
-    __gen_videos(generated_data)
+    __gen_videos(combined)
     __gen_audios(audio)
     batchsize = audio.shape[0]
     for k in range(batchsize):
